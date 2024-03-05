@@ -1,25 +1,47 @@
 function handler () {
     echo $(cat /tmp/payload)
     jq -r '.Records[0].body' < /tmp/payload > /tmp/Sample.txt
-    echo "$(perl -0777 -ne 'print $1 if /"subjectiveAnswer": "(.*?)"/s' /tmp/Sample.txt)" > /tmp/Sample.java
+    head -n -7 /tmp/Sample.txt > /tmp/Sample.java
+#    echo "$(perl -0777 -ne 'print $1 if /"subjectiveAnswer": "(.*?)"/s' /tmp/Sample.txt)" > /tmp/Sample.java
     echo $(cat /tmp/Sample.java)
     echo $(cat /tmp/Sample.txt)
     # Extract values from the body
-    userid=$(grep -oP '"candidateId": \K["\d]+' /tmp/Sample.txt) 
-    qid=$(grep -oP '"questionMasterId": \K["\d]+' /tmp/Sample.txt)
+    userid=$(grep -oE 'candidateId:[0-9]+' /tmp/Sample.txt | cut -d ':' -f 2)
+    qid=$(grep -oE 'questionMasterId:[0-9]+' /tmp/Sample.txt | cut -d ':' -f 2)
     echo "userid is $userid"
     echo "qid is $qid"
-    echo $qid
-    qid=${qid:-1}
-    echo $qid
     code=$(cat /tmp/Sample.java)
-    testid=$(grep -oP '"testId": \K["\d]+' /tmp/Sample.txt)
-    timetoans=$(grep -oP '"timeTakenToAnswer": \K["\d]+' /tmp/Sample.txt)
-    testcase_timeout=$(grep -oP '"testcaseTimeout": \K["\d]+' /tmp/Sample.txt)
-    is_submission=$(grep -oP '"isSubmission": \K[^,]+' /tmp/Sample.txt)
-    noOfTestCases=$(grep -oP '"noOfTestCases": \K["\d]+' /tmp/Sample.txt)
+    testid=$(grep -oE 'testId:[0-9]+' /tmp/Sample.txt | cut -d ':' -f 2)
+    timetoans=$(grep -oP 'timeTakenToAnswer:[0-9]+' /tmp/Sample.txt | cut -d ':' -f 2)
+    testcase_timeout=$(grep -oP 'testcaseTimeout:[0-9]+' /tmp/Sample.txt | cut -d ':' -f 2)
+    is_submission=$(grep -Eo 'isSubmission:[a-zA-Z]+' /tmp/Sample.txt | cut -d ':' -f 2)
+    noOfTestCases=$(grep -oP 'noOfTestCases:[0-9]+' /tmp/Sample.txt | cut -d ':' -f 2)
+    echo "testid is $testid"
+    echo "timetoans is $timetoans"
+    echo "is_submission $is_submission"
+    echo "testcase_timeout $testcase_timeout"
+    echo "noOfTestCases $noOfTestCases"
     noOfTestCases=${noOfTestCases:-4}
     testcase_timeout=${testcase_timeout:-2}
+#    echo "$(perl -0777 -ne 'print $1 if /"subjectiveAnswer": "(.*?)"/s' /tmp/Sample.txt)" > /tmp/Sample.java
+#    echo $(cat /tmp/Sample.java)
+#    echo $(cat /tmp/Sample.txt)
+#    # Extract values from the body
+#    userid=$(grep -oP '"candidateId": \K["\d]+' /tmp/Sample.txt)
+#    qid=$(grep -oP '"questionMasterId": \K["\d]+' /tmp/Sample.txt)
+#    echo "userid is $userid"
+#    echo "qid is $qid"
+#    echo $qid
+#    qid=${qid:-1}
+#    echo $qid
+#    code=$(cat /tmp/Sample.java)
+#    testid=$(grep -oP '"testId": \K["\d]+' /tmp/Sample.txt)
+#    timetoans=$(grep -oP '"timeTakenToAnswer": \K["\d]+' /tmp/Sample.txt)
+#    testcase_timeout=$(grep -oP '"testcaseTimeout": \K["\d]+' /tmp/Sample.txt)
+#    is_submission=$(grep -oP '"isSubmission": \K[^,]+' /tmp/Sample.txt)
+#    noOfTestCases=$(grep -oP '"noOfTestCases": \K["\d]+' /tmp/Sample.txt)
+#    noOfTestCases=${noOfTestCases:-4}
+#    testcase_timeout=${testcase_timeout:-2}
 
     if javac -d /tmp /tmp/Sample.java 2> /tmp/CompilationError.txt; then
         echo "Compilation successful"
@@ -27,18 +49,18 @@ function handler () {
         json="["
         while [ $i -le $noOfTestCases ]
         do
-            time -f "Time(s): %e Memory(Kb): %M " timeout 2 java -cp /tmp Sample < /mnt/efs/$qid/input$i.txt > /tmp/useroutput$i.txt 2> /tmp/error$i.txt
-            cat /tmp/useroutput$i.txt
+            time -f "Time(s): %e Memory(Kb): %M " timeout 2 java -cp /tmp Sample < /mnt/efs/$qid/input$i.txt > /tmp/useroutput$i 2> /tmp/error$i
+            cat /tmp/useroutput$i
             cat /mnt/efs/$qid/output$i.txt
 
             json="${json} {\"name\": \"Testcase - $i\" ,"
             json="${json} \"input\": \"$(cat /mnt/efs/$qid/input$i.txt)\" ,"
             json="${json} \"expectedoutput\": \"$(cat /mnt/efs/$qid/output$i.txt)\" ,"
-            json="${json} \"actualoutput\": \"$(cat /tmp/useroutput$i.txt)\" ,"
+            json="${json} \"actualoutput\": \"$(cat /tmp/useroutput$i)\" ,"
 
             # Check if the testcase passed
-            if cmp -s /tmp/useroutput$i.txt /mnt/efs/$qid/output$i.txt; then
-                val=$(tail -n1 /tmp/error$i.txt | grep -o -E '[0-9]+' | head -n1)
+            if cmp -s /tmp/useroutput$i /mnt/efs/$qid/output$i.txt; then
+                val=$(tail -n1 /tmp/error$i | grep -o -E '[0-9]+' | head -n1)
                 if [ $val -ge $testcase_timeout ]
                 then
                     echo "Testcase - $i failed because of exceed time limit"
@@ -49,12 +71,12 @@ function handler () {
                     json="${json} \"passed\": true ,"
                     json="${json} ,\"message\":\"OK\" ,"
                 fi
-                json="${json} \"metric\":\"$(tail -n1 /tmp/error$i.txt)\"},"
+                json="${json} \"metric\":\"$(tail -n1 /tmp/error$i)\"},"
             else
                 echo "Testcase - $i failed because user output does not match with expected output"
                 json="${json} \"passed\": false ,"
                 json="${json} \"message\":\"User output does not match with expected output\" ,"
-                json="${json} \"metric\":\"$(tail -n1 /tmp/error$i.txt)\"},"
+                json="${json} \"metric\":\"$(tail -n1 /tmp/error$i)\"},"
             fi
             i=`expr $i + 1`
         done
