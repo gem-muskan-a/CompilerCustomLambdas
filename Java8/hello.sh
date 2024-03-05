@@ -3,10 +3,15 @@ function handler () {
     jq -r '.Records[0].body' < /tmp/payload > /tmp/Sample.txt
     echo "$(perl -0777 -ne 'print $1 if /"subjectiveAnswer": "(.*?)"/s' /tmp/Sample.txt)" > /tmp/Sample.java
     echo $(cat /tmp/Sample.java)
-    
+    echo $(cat /tmp/Sample.txt)
     # Extract values from the body
     userid=$(grep -oP '"candidateId": \K["\d]+' /tmp/Sample.txt) 
-    qid=$(grep -oP '"questionMasterId": "\K["\d]+' /tmp/Sample.txt)
+    qid=$(grep -oP '"questionMasterId": \K["\d]+' /tmp/Sample.txt)
+    echo "userid is $userid"
+    echo "qid is $qid"
+    echo $qid
+    qid=${qid:-1}
+    echo $qid
     code=$(cat /tmp/Sample.java)
     testid=$(grep -oP '"testId": \K["\d]+' /tmp/Sample.txt)
     timetoans=$(grep -oP '"timeTakenToAnswer": \K["\d]+' /tmp/Sample.txt)
@@ -22,18 +27,18 @@ function handler () {
         json="["
         while [ $i -le $noOfTestCases ]
         do
-            time -f "Time(s): %e Memory(Kb): %M " timeout 2 java -cp /tmp Sample < /mnt/efs/$qid/input$i > /mnt/efs/$qid/useroutput$i 2> /mnt/efs/$qid/error$i 
-            cat /mnt/efs/$qid/useroutput$i
-            cat /mnt/efs/$qid/output$i
+            time -f "Time(s): %e Memory(Kb): %M " timeout 2 java -cp /tmp Sample < /mnt/efs/$qid/input$i.txt > /tmp/useroutput$i.txt 2> /tmp/error$i.txt
+            cat /tmp/useroutput$i.txt
+            cat /mnt/efs/$qid/output$i.txt
 
             json="${json} {\"name\": \"Testcase - $i\" ,"
-            json="${json} \"input\": \"$(cat /mnt/efs/$qid/input$i)\" ,"
-            json="${json} \"expectedoutput\": \"$(cat /mnt/efs/$qid/output$i)\" ,"
-            json="${json} \"actualoutput\": \"$(cat /mnt/efs/$qid/useroutput$i)\" ,"
+            json="${json} \"input\": \"$(cat /mnt/efs/$qid/input$i.txt)\" ,"
+            json="${json} \"expectedoutput\": \"$(cat /mnt/efs/$qid/output$i.txt)\" ,"
+            json="${json} \"actualoutput\": \"$(cat /tmp/useroutput$i.txt)\" ,"
 
             # Check if the testcase passed
-            if cmp -s /mnt/efs/$qid/useroutput$i /mnt/efs/$qid/output$i; then
-                val=$(tail -n1 /mnt/efs/$qid/error$i | grep -o -E '[0-9]+' | head -n1)
+            if cmp -s /tmp/useroutput$i.txt /mnt/efs/$qid/output$i.txt; then
+                val=$(tail -n1 /tmp/error$i.txt | grep -o -E '[0-9]+' | head -n1)
                 if [ $val -ge $testcase_timeout ]
                 then
                     echo "Testcase - $i failed because of exceed time limit"
@@ -44,12 +49,12 @@ function handler () {
                     json="${json} \"passed\": true ,"
                     json="${json} ,\"message\":\"OK\" ,"
                 fi
-                json="${json} \"metric\":\"$(tail -n1 /mnt/efs/$qid/error$i)\"},"
+                json="${json} \"metric\":\"$(tail -n1 /tmp/error$i.txt)\"},"
             else
                 echo "Testcase - $i failed because user output does not match with expected output"
                 json="${json} \"passed\": false ,"
                 json="${json} \"message\":\"User output does not match with expected output\" ,"
-                json="${json} \"metric\":\"$(tail -n1 /mnt/efs/$qid/error$i)\"},"
+                json="${json} \"metric\":\"$(tail -n1 /tmp/error$i.txt)\"},"
             fi
             i=`expr $i + 1`
         done
@@ -68,6 +73,7 @@ function handler () {
         insert_query="INSERT INTO code_verdict(candidate_id, created_date_time, is_submission, is_compile_success, language_used, question_master_id, subjective_answer, test_id, time_taken_to_answer, verdict) VALUES ('$userid', CURRENT_TIMESTAMP, '$is_submission', 'false', 'java', '$qid', '$code', '$testid', '$timetoans', '$json')";
     fi  
     echo "Connecting and Inserting into db :)"
-    psql --host=${DB_ENDPOINT} --port=${DB_PORT} --user=${DB_USERNAME} --password=${DB_PASSWORD} ${DB_NAME} -e "$insert_query";
+    echo $insert_query
+    PGPASSWORD=${DB_PASSWORD} psql --host=${DB_ENDPOINT} --port=${DB_PORT} --user=${DB_USERNAME} ${DB_NAME} -c "$insert_query";
     echo "inserted :)"
 }
