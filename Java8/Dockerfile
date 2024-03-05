@@ -4,8 +4,10 @@ RUN yum install java-1.8.0-openjdk-devel -y
 RUN yum install jq -y
 RUN yum install postgresql -y
 RUN yum install time -y
+RUN yum install -y perl
 
 COPY hello.sh /var/runtime/hello.sh
 COPY bootstrap /var/runtime/bootstrap
+RUN chmod +x /var/runtime/bootstrap
 
 CMD ["hello.handler"]
