@@ -1,7 +1,7 @@
 function handler () {
     echo $(cat /tmp/payload)
     jq -r '.Records[0].body' < /tmp/payload > /tmp/Sample.txt
-    head -n -5 /tmp/Sample.txt > /tmp/Sample.java
+    head -n -8 /tmp/Sample.txt > /tmp/Sample.java
     echo $(cat /tmp/Sample.java)
     echo $(cat /tmp/Sample.txt)
     code=$(cat /tmp/Sample.java)

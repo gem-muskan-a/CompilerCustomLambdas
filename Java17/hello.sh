@@ -1,7 +1,7 @@
 function handler () {
     echo $(cat /tmp/payload)
     jq -r '.Records[0].body' < /tmp/payload > /tmp/Sample.txt
-    head -n -5 /tmp/Sample.txt > /tmp/Sample.java
+    head -n -8 /tmp/Sample.txt > /tmp/Sample.java
     echo $(cat /tmp/Sample.java)
     echo $(cat /tmp/Sample.txt)
     code=$(cat /tmp/Sample.java)
@@ -19,7 +19,7 @@ function handler () {
         json="["
         while [ $i -le $noOfTestCases ]
         do
-            time -f "Time(s): %e Memory(Kb): %M " timeout 2 java -cp /tmp Sample < /mnt/efs/$qid/input$i.txt > /tmp/useroutput$i 2> /tmp/error$i
+            time -f "Time(s): %e Memory(Kb): %M " timeout 15 java -cp /tmp Sample < /mnt/efs/$qid/input$i.txt > /tmp/useroutput$i 2> /tmp/error$i
             cat /tmp/useroutput$i
             cat /mnt/efs/$qid/output$i.txt
 

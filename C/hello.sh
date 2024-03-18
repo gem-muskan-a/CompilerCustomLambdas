@@ -1,10 +1,10 @@
 function handler () {
     echo $(cat /tmp/payload)
     jq -r '.Records[0].body' < /tmp/payload > /tmp/Sample.txt
-    head -n -5 /tmp/Sample.txt > /tmp/Sample.java
-    echo $(cat /tmp/Sample.java)
+    head -n -8 /tmp/Sample.txt > /tmp/Sample.c
+    echo $(cat /tmp/Sample.c)
     echo $(cat /tmp/Sample.txt)
-    code=$(cat /tmp/Sample.java)
+    code=$(cat /tmp/Sample.c)
     qid=$(grep -oE 'questionMasterId:[0-9]+' /tmp/Sample.txt | cut -d ':' -f 2)
     echo "qid is $qid"
     testcase_timeout=$(grep -oE 'testcaseTimeout:[0-9]+' /tmp/Sample.txt | cut -d ':' -f 2)
@@ -13,13 +13,13 @@ function handler () {
     noOfTestCases=${noOfTestCases:-4}
     testcase_timeout=${testcase_timeout:-2}
 
-    if javac -d /tmp /tmp/Sample.java 2> /tmp/CompilationError.txt; then
+    if gcc /tmp/Sample.c -o /tmp/Sample 2> /tmp/CompilationError.txt; then
         echo "Compilation successful"
         i=1
         json="["
         while [ $i -le $noOfTestCases ]
         do
-            time -f "Time(s): %e Memory(Kb): %M " timeout 2 java -cp /tmp Sample < /mnt/efs/$qid/input$i.txt > /tmp/useroutput$i 2> /tmp/error$i
+            time -f "Time(s): %e Memory(Kb): %M " timeout 2 /tmp/Sample < /mnt/efs/$qid/input$i.txt > /tmp/useroutput$i 2> /tmp/error$i
             cat /tmp/useroutput$i
             cat /mnt/efs/$qid/output$i.txt
 

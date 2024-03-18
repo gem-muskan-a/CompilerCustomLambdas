@@ -1,10 +1,10 @@
 function handler () {
     echo $(cat /tmp/payload)
     jq -r '.Records[0].body' < /tmp/payload > /tmp/Sample.txt
-    head -n -5 /tmp/Sample.txt > /tmp/Sample.java
-    echo $(cat /tmp/Sample.java)
+    head -n -8 /tmp/Sample.txt > /tmp/Sample.cpp
+    echo $(cat /tmp/Sample.cpp)
     echo $(cat /tmp/Sample.txt)
-    code=$(cat /tmp/Sample.java)
+    code=$(cat /tmp/Sample.cpp)
     qid=$(grep -oE 'questionMasterId:[0-9]+' /tmp/Sample.txt | cut -d ':' -f 2)
     echo "qid is $qid"
     testcase_timeout=$(grep -oE 'testcaseTimeout:[0-9]+' /tmp/Sample.txt | cut -d ':' -f 2)
@@ -13,13 +13,13 @@ function handler () {
     noOfTestCases=${noOfTestCases:-4}
     testcase_timeout=${testcase_timeout:-2}
 
-    if javac -d /tmp /tmp/Sample.java 2> /tmp/CompilationError.txt; then
+    if g++ /tmp/Sample.cpp -o /tmp/Sample 2> /tmp/CompilationError.txt; then
         echo "Compilation successful"
         i=1
         json="["
         while [ $i -le $noOfTestCases ]
         do
-            time -f "Time(s): %e Memory(Kb): %M " timeout 2 java -cp /tmp Sample < /mnt/efs/$qid/input$i.txt > /tmp/useroutput$i 2> /tmp/error$i
+            time -f "Time(s): %e Memory(Kb): %M " timeout 2 /tmp/Sample < /mnt/efs/$qid/input$i.txt > /tmp/useroutput$i 2> /tmp/error$i
             cat /tmp/useroutput$i
             cat /mnt/efs/$qid/output$i.txt
 
@@ -53,19 +53,19 @@ function handler () {
         json=${json::-1}
         json="${json}]"
         echo "Response: $json"
-        insert_query="UPDATE code_verdict SET is_compile_success = 'true', subjective_answer = '$code', verdict = '$json' , status = 'DONE' , updated_date_time = CURRENT_TIMESTAMP WHERE code_verdict_id = '$verdictId'";
+         insert_query="UPDATE code_verdict SET is_compile_success = 'true', subjective_answer = '$code', verdict = '$json' , status = 'DONE' , updated_date_time = CURRENT_TIMESTAMP WHERE code_verdict_id = '$verdictId'";
 
-    else
-        error=$(cat /tmp/CompilationError.txt)
-        echo '{"status": "error", "message": "Compilation failed", "error": "'"$error"'"}'
-        error=$(echo "$error" | tr -d "'")
-        echo error
-        json="[$error]"
-        echo "Response: $json"
-        insert_query="UPDATE code_verdict SET is_compile_success = 'false', subjective_answer = '$code', verdict = '$json' , status = 'DONE' , updated_date_time = CURRENT_TIMESTAMP WHERE code_verdict_id = '$verdictId'";
-    fi
-    echo "Connecting and Inserting into db :)"
-    echo $insert_query
-    PGPASSWORD=${DB_PASSWORD} psql --host=${DB_ENDPOINT} --port=${DB_PORT} --user=${DB_USERNAME} ${DB_NAME} -c "$insert_query";
-    echo "inserted :)"
-}
+     else
+         error=$(cat /tmp/CompilationError.txt)
+         echo '{"status": "error", "message": "Compilation failed", "error": "'"$error"'"}'
+         error=$(echo "$error" | tr -d "'")
+         echo error
+         json="[$error]"
+         echo "Response: $json"
+         insert_query="UPDATE code_verdict SET is_compile_success = 'false', subjective_answer = '$code', verdict = '$json' , status = 'DONE' , updated_date_time = CURRENT_TIMESTAMP WHERE code_verdict_id = '$verdictId'";
+     fi
+     echo "Connecting and Inserting into db :)"
+     echo $insert_query
+     PGPASSWORD=${DB_PASSWORD} psql --host=${DB_ENDPOINT} --port=${DB_PORT} --user=${DB_USERNAME} ${DB_NAME} -c "$insert_query";
+     echo "inserted :)"
+ }
