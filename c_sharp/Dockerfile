@@ -1,6 +1,6 @@
 FROM public.ecr.aws/lambda/provided:al2.2022.12.02.19
 
-RUN yum install java-1.8.0-openjdk-devel -y
+RUN yum install dotnet-sdk-7.0 -y
 RUN yum install jq -y
 RUN yum install postgresql -y
 RUN yum install time -y
